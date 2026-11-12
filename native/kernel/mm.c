@@ -29,7 +29,8 @@
 #define USER_HI   0x7FFE0000u
 #define VA_GRAIN  0x10000u
 #define MAX_REGIONS 4096
-#define MAX_CONTIG  4096
+/* 1 block per page of 128 MiB, xbox has no count limit.. SvC Chaos needs >4096 at boot */
+#define MAX_CONTIG  ((128u << 20) / NC_PAGE)
 
 typedef struct Region {
     uint32_t base, size, protect;
@@ -542,7 +543,8 @@ static uint32_t contig_alloc(NcKernel *k, uint32_t size, uint32_t lo, uint32_t h
      * pages than asked for. */
     uint32_t pa = UINT32_MAX, moved = 0;
     static unsigned s_failed;           /* failures since the last success (reports below) */
-    if (nc_vm_free_bytes(k->vm) >= size) {
+    /* check table room BEFORE taking pages, else they leak */
+    if (g_ncontig < MAX_CONTIG && nc_vm_free_bytes(k->vm) >= size) {
         pa = nc_vm_alloc_phys_top(k->vm, size, lo, hi, align, &moved);
     }
     if (pa == UINT32_MAX && g_ncontig < MAX_CONTIG && nc_vm_free_bytes(k->vm) >= size) {
